@@ -615,7 +615,7 @@ public class RodaCoreFactory {
       synchronizationDirectoryPath = getDataPath().resolve(synchronizationFolder);
       Files.createDirectories(synchronizationDirectoryPath);
       Files.createDirectories(synchronizationDirectoryPath.resolve(RodaConstants.CORE_SYNCHRONIZATION_INCOMING_FOLDER));
-      Files.createDirectories(synchronizationDirectoryPath.resolve(RodaConstants.CORE_SYNCHRONIZATION_OUTCOME_FOLDER));
+      Files.createDirectories(synchronizationDirectoryPath.resolve(RodaConstants.CORE_SYNCHRONIZATION_OUTGOING_FOLDER));
     } catch (IOException e) {
       throw new RuntimeException(
         "Unable to create Synchronization DIRECTORY " + synchronizationDirectoryPath + ", Aborting...", e);

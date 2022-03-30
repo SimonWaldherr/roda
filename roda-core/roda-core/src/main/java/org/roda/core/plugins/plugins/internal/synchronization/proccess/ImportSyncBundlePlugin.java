@@ -1,7 +1,6 @@
 package org.roda.core.plugins.plugins.internal.synchronization.proccess;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,15 +9,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 import org.roda.core.RodaCoreFactory;
 import org.roda.core.common.SyncUtils;
-import org.roda.core.common.iterables.CloseableIterable;
 import org.roda.core.data.common.RodaConstants;
-import org.roda.core.data.exceptions.AlreadyExistsException;
 import org.roda.core.data.exceptions.AuthorizationDeniedException;
 import org.roda.core.data.exceptions.GenericException;
 import org.roda.core.data.exceptions.InvalidParameterException;
@@ -26,8 +22,7 @@ import org.roda.core.data.exceptions.JobAlreadyStartedException;
 import org.roda.core.data.exceptions.NotFoundException;
 import org.roda.core.data.exceptions.RODAException;
 import org.roda.core.data.exceptions.RequestNotValidException;
-import org.roda.core.data.utils.CentralEntitiesJsonUtils;
-import org.roda.core.data.utils.JsonUtils;
+import org.roda.core.data.utils.LastSynchronizationReportUtils;
 import org.roda.core.data.utils.URLUtils;
 import org.roda.core.data.v2.LiteOptionalWithCause;
 import org.roda.core.data.v2.Void;
@@ -35,9 +30,6 @@ import org.roda.core.data.v2.index.IsIndexed;
 import org.roda.core.data.v2.index.filter.Filter;
 import org.roda.core.data.v2.index.filter.SimpleFilterParameter;
 import org.roda.core.data.v2.index.select.SelectedItemsList;
-import org.roda.core.data.v2.ip.IndexedAIP;
-import org.roda.core.data.v2.ip.IndexedDIP;
-import org.roda.core.data.v2.ip.StoragePath;
 import org.roda.core.data.v2.ip.metadata.IndexedPreservationEvent;
 import org.roda.core.data.v2.jobs.Job;
 import org.roda.core.data.v2.jobs.PluginParameter;
@@ -45,14 +37,12 @@ import org.roda.core.data.v2.jobs.PluginState;
 import org.roda.core.data.v2.jobs.PluginType;
 import org.roda.core.data.v2.jobs.Report;
 import org.roda.core.data.v2.synchronization.bundle.BundleState;
-import org.roda.core.data.v2.synchronization.bundle.CentralEntities;
 import org.roda.core.data.v2.synchronization.bundle.EntitiesBundle;
-import org.roda.core.data.v2.synchronization.bundle.PackageState;
+import org.roda.core.data.v2.synchronization.bundle.LastSynchronizationState;
 import org.roda.core.data.v2.synchronization.central.DistributedInstance;
 import org.roda.core.index.IndexService;
 import org.roda.core.index.utils.IterableIndexResult;
 import org.roda.core.model.ModelService;
-import org.roda.core.model.utils.ModelUtils;
 import org.roda.core.plugins.AbstractPlugin;
 import org.roda.core.plugins.Plugin;
 import org.roda.core.plugins.PluginException;
@@ -60,10 +50,7 @@ import org.roda.core.plugins.RODAProcessingLogic;
 import org.roda.core.plugins.orchestrate.JobPluginInfo;
 import org.roda.core.plugins.plugins.PluginHelper;
 import org.roda.core.plugins.plugins.internal.DeleteRODAObjectPlugin;
-import org.roda.core.storage.Container;
-import org.roda.core.storage.Resource;
 import org.roda.core.storage.StorageService;
-import org.roda.core.storage.fs.FileStorageService;
 import org.roda.core.util.IdUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -207,7 +194,12 @@ public class ImportSyncBundlePlugin extends AbstractPlugin<Void> {
         validateChecksum(bundleWorkingDir, bundleState);
         SyncUtils.importStorage(storage, bundleWorkingDir, bundleState, jobPluginInfo, true);
         SyncUtils.copyAttachments(instanceIdentifier);
-        deleteAndValidateEntities(instanceIdentifier, bundleWorkingDir, bundleState.getEntitiesBundle());
+
+        final LastSynchronizationState lastSynchronizationState = new LastSynchronizationState(IdUtils.createUUID(),
+          instanceIdentifier);
+        lastSynchronizationState.setTo_date(bundleState.getToDate().toString());
+        lastSynchronizationState.setFrom_date(bundleState.getFromDate().toString());
+        deleteAndValidateEntities(lastSynchronizationState, bundleWorkingDir, bundleState.getEntitiesBundle());
 
         DistributedInstance distributedInstance = model.retrieveDistributedInstance(instanceIdentifier);
         distributedInstance.setLastSyncDate(bundleState.getToDate());
@@ -272,8 +264,8 @@ public class ImportSyncBundlePlugin extends AbstractPlugin<Void> {
    * Iterates over the files in bundle (AIP, DIP, Risks) and deletes and validate
    * the Central Entities.
    * 
-   * @param instanceIdentifier
-   *          the instance identifier.
+   * @param lastSynchronizationState
+   *          {@link LastSynchronizationState}
    * @param bundleWorkingDir
    *          {@link Path}.
    * @param entitiesBundle
@@ -291,19 +283,19 @@ public class ImportSyncBundlePlugin extends AbstractPlugin<Void> {
    * @throws IOException
    *           if some i/o error occurs.
    */
-  public void deleteAndValidateEntities(final String instanceIdentifier, final Path bundleWorkingDir,
-    final EntitiesBundle entitiesBundle) throws AuthorizationDeniedException, RequestNotValidException,
-    GenericException, NotFoundException, JobAlreadyStartedException, IOException {
+  public void deleteAndValidateEntities(final LastSynchronizationState lastSynchronizationState,
+    final Path bundleWorkingDir, final EntitiesBundle entitiesBundle) throws AuthorizationDeniedException,
+    RequestNotValidException, GenericException, NotFoundException, JobAlreadyStartedException, IOException {
     final Map<Path, Class<? extends IsIndexed>> entitiesPathMap = SyncUtils.createEntitiesPaths(bundleWorkingDir,
       entitiesBundle);
-    final CentralEntities centralEntities = new CentralEntities();
     for (Map.Entry entry : entitiesPathMap.entrySet()) {
-      deleteBundleEntities((Path) entry.getKey(), (Class<? extends IsIndexed>) entry.getValue(), instanceIdentifier,
-        centralEntities);
-      validateCentralEntities(centralEntities, (Path) entry.getKey(), (Class<? extends IsIndexed>) entry.getValue());
+      deleteBundleEntities((Path) entry.getKey(), (Class<? extends IsIndexed>) entry.getValue(),
+        lastSynchronizationState.getInstance_id(), lastSynchronizationState);
+      validateCentralEntities(lastSynchronizationState, (Path) entry.getKey(),
+        (Class<? extends IsIndexed>) entry.getValue());
     }
 
-    SyncUtils.writeEntitiesFile(centralEntities, instanceIdentifier);
+    SyncUtils.writeCentralLastSyncFile(lastSynchronizationState, instanceIdentifier);
   }
 
   /**
@@ -315,8 +307,8 @@ public class ImportSyncBundlePlugin extends AbstractPlugin<Void> {
    *          {@link Class<? extends IsIndexed>}.
    * @param instanceIdentifier
    *          Instance identifier.
-   * @param centralEntities
-   *          {@link CentralEntities}.
+   * @param lastSynchronizationState
+   *          {@link LastSynchronizationState}.
    * @throws GenericException
    *           if some error occurs.
    * @throws AuthorizationDeniedException
@@ -329,7 +321,7 @@ public class ImportSyncBundlePlugin extends AbstractPlugin<Void> {
    *           if the job is already in execution.
    */
   private void deleteBundleEntities(final Path readPath, final Class<? extends IsIndexed> indexedClass,
-    final String instanceIdentifier, final CentralEntities centralEntities) throws GenericException,
+    final String instanceIdentifier, final LastSynchronizationState lastSynchronizationState) throws GenericException,
     AuthorizationDeniedException, RequestNotValidException, NotFoundException, JobAlreadyStartedException {
     final List<String> listToRemove = new ArrayList<>();
     final IndexService index = RodaCoreFactory.getIndexService();
@@ -345,7 +337,7 @@ public class ImportSyncBundlePlugin extends AbstractPlugin<Void> {
       result.forEach(indexed -> {
         boolean exist = false;
         try {
-          final JsonParser jsonParser = CentralEntitiesJsonUtils.createJsonParser(readPath);
+          final JsonParser jsonParser = LastSynchronizationReportUtils.createJsonParser(readPath);
           while (jsonParser.nextToken() != JsonToken.END_ARRAY) {
             JsonToken token = jsonParser.currentToken();
             if ((token != JsonToken.START_ARRAY) && (token != JsonToken.END_ARRAY)
@@ -367,7 +359,7 @@ public class ImportSyncBundlePlugin extends AbstractPlugin<Void> {
 
     if (!listToRemove.isEmpty()) {
 
-      setRemovedEntities(centralEntities, listToRemove, indexedClass);
+      lastSynchronizationState.getRemovedEntities().put(indexedClass.getName(), new ArrayList<>(listToRemove));
 
       final Job job = new Job();
       job.setId(IdUtils.createUUID());
@@ -383,46 +375,23 @@ public class ImportSyncBundlePlugin extends AbstractPlugin<Void> {
   }
 
   /**
-   * Sets the lists of removed entities in {@link CentralEntities} by the given
-   * {@link Class<? extends IsIndexed>}.
-   * 
-   * @param centralEntities
-   *          {@link CentralEntities}.
-   * @param listToRemove
-   *          {@link List}.
-   * @param indexedClass
-   *          {@link Class<? extends IsIndexed>}.
-   */
-  private void setRemovedEntities(final CentralEntities centralEntities, final List<String> listToRemove,
-    final Class<? extends IsIndexed> indexedClass) {
-
-    if (indexedClass == IndexedAIP.class) {
-      centralEntities.setAipsList(new ArrayList<>(listToRemove));
-    } else if (indexedClass == IndexedDIP.class) {
-      centralEntities.setDipsList(new ArrayList<>(listToRemove));
-    } else {
-      centralEntities.setRisksList(new ArrayList<>(listToRemove));
-    }
-  }
-
-  /**
    * Read the Local Instance list of entities and checks if Central instance have
    * this entity.
    * 
-   * @param centralEntities
-   *          {@link CentralEntities}
+   * @param lastSynchronizationState
+   *          {@link LastSynchronizationState}
    * @param readPath
    *          {@link Path}.
    * @param indexedClass
    *          {@link Class<? extends IsIndexed>}.
    */
-  public void validateCentralEntities(final CentralEntities centralEntities, final Path readPath,
+  public void validateCentralEntities(final LastSynchronizationState lastSynchronizationState, final Path readPath,
     final Class<? extends IsIndexed> indexedClass) {
     final IndexService index = RodaCoreFactory.getIndexService();
     final List<String> missingList = new ArrayList<>();
     String id = null;
     try {
-      final JsonParser jsonParser = CentralEntitiesJsonUtils.createJsonParser(readPath);
+      final JsonParser jsonParser = LastSynchronizationReportUtils.createJsonParser(readPath);
       while (jsonParser.nextToken() != JsonToken.END_ARRAY) {
         id = jsonParser.getText();
         final JsonToken token = jsonParser.currentToken();
@@ -436,30 +405,10 @@ public class ImportSyncBundlePlugin extends AbstractPlugin<Void> {
       LOGGER.error("Can't read the json file {}", e.getMessage());
     }
 
-    syncErrors += missingList.size();
-    setMissingEntities(centralEntities, missingList, indexedClass);
-  }
 
-  /**
-   * Sets the lists of missing entities in {@link CentralEntities} by the given
-   * {@link Class<? extends IsIndexed>}.
-   * 
-   * @param centralEntities
-   *          {@link CentralEntities}.
-   * @param missingList
-   *          {@link List}.
-   * @param indexedClass
-   *          {@link Class<? extends IsIndexed>}.
-   */
-  private void setMissingEntities(final CentralEntities centralEntities, final List<String> missingList,
-    final Class<? extends IsIndexed> indexedClass) {
-
-    if (indexedClass == IndexedAIP.class) {
-      centralEntities.setMissingAips(new ArrayList<>(missingList));
-    } else if (indexedClass == IndexedDIP.class) {
-      centralEntities.setDipsList(new ArrayList<>(missingList));
-    } else {
-      centralEntities.setRisksList(new ArrayList<>(missingList));
+    if (!missingList.isEmpty()) {
+      syncErrors += missingList.size();
+      lastSynchronizationState.getIssues().put(indexedClass.getName(), new ArrayList<>(missingList));
     }
   }
 }

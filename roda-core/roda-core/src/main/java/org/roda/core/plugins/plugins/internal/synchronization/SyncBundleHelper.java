@@ -19,7 +19,7 @@ import org.roda.core.data.exceptions.GenericException;
 import org.roda.core.data.exceptions.NotFoundException;
 import org.roda.core.data.exceptions.RODAException;
 import org.roda.core.data.exceptions.RequestNotValidException;
-import org.roda.core.data.utils.CentralEntitiesJsonUtils;
+import org.roda.core.data.utils.LastSynchronizationReportUtils;
 import org.roda.core.data.utils.JsonUtils;
 import org.roda.core.data.v2.index.IsIndexed;
 import org.roda.core.data.v2.index.filter.Filter;
@@ -222,12 +222,12 @@ public class SyncBundleHelper {
       filter.add(new SimpleFilterParameter(RodaConstants.PRESERVATION_EVENT_OBJECT_CLASS,
         IndexedPreservationEvent.PreservationMetadataEventClass.REPOSITORY.toString()));
     }
-    CentralEntitiesJsonUtils.init(destinationPath);
+    LastSynchronizationReportUtils.init(destinationPath);
     try (IterableIndexResult<? extends IsIndexed> result = index.findAll(indexedClass, filter, true,
       Collections.singletonList(RodaConstants.INDEX_UUID))) {
       result.forEach(indexed -> {
         try {
-          CentralEntitiesJsonUtils.writeString(indexed.getId());
+          LastSynchronizationReportUtils.writeString(indexed.getId());
         } catch (final IOException e) {
           LOGGER.error("Error writing the ID {} {}", indexed.getId(), e);
         }
@@ -236,7 +236,7 @@ public class SyncBundleHelper {
       LOGGER.error("Error getting iterator when creating aip list", e);
     }
 
-    CentralEntitiesJsonUtils.close(true);
+    LastSynchronizationReportUtils.close(true);
 
   }
 }

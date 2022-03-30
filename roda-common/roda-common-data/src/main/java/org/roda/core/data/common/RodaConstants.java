@@ -281,7 +281,7 @@ public final class RodaConstants {
   public static final String CORE_DISPOSAL_BIN_FOLDER = "disposal-bin";
   public static final String CORE_FILE_SHALLOW_TMP_FOLDER = "file-shallow";
   public static final String CORE_SYNCHRONIZATION_FOLDER = "synchronization";
-  public static final String CORE_SYNCHRONIZATION_OUTCOME_FOLDER = "outcome";
+  public static final String CORE_SYNCHRONIZATION_OUTGOING_FOLDER = "outgoing";
   public static final String CORE_SYNCHRONIZATION_INCOMING_FOLDER = "incoming";
   public static final String CORE_LOCAL_INSTANCE_FOLDER = "local-instance";
   public static final String CORE_JOB_ATTACHMENTS_FOLDER = "job-attachments";
@@ -1794,7 +1794,7 @@ public final class RodaConstants {
   public static final String SYNCHRONIZATION_CONFIG_LOCAL_INSTANCE_FILE_PATH = SYNCHRONIZATION_CONFIG_LOCAL_INSTANCE_FOLDER
     + "/" + SYNCHRONIZATION_CONFIG_LOCAL_INSTANCE_FILE;
   public static final String SYNCHRONIZATION_OUTCOME_BUNDLE_PATH = CORE_DATA_FOLDER + "/" + CORE_SYNCHRONIZATION_FOLDER
-    + "/" + CORE_SYNCHRONIZATION_OUTCOME_FOLDER + "/" + SYNCHRONIZATION_BUNDLE_FOLDER;
+    + "/" + CORE_SYNCHRONIZATION_OUTGOING_FOLDER + "/" + SYNCHRONIZATION_BUNDLE_FOLDER;
   public static final String SYNCHRONIZATION_INCOMING_BUNDLE_PATH = CORE_DATA_FOLDER + "/" + CORE_SYNCHRONIZATION_FOLDER
     + "/" + CORE_SYNCHRONIZATION_INCOMING_FOLDER + "/" + SYNCHRONIZATION_BUNDLE_FOLDER;
   public static final String PROTOCOL_SEPARATOR = "://";
@@ -1809,15 +1809,32 @@ public final class RodaConstants {
   public static final String SYNCHRONIZATION_LOCAL_INSTANCE_REPOSITORY_EVENT_LIST_FILE_NAME = "repository_event_list";
   public static final String SYNCHRONIZATION_LOCAL_INSTANCE_RISK_LIST_FILE_NAME = "risk_list";
 
+  // Last Sync File keys
   public static final String SYNCHRONIZATION_REPORT_FILE = "last_synchronization";
 
-  public static final String SYNCHRONIZATION_REPORT_KEY_LIST_REMOVED_AIP = "removed_aip";
-  public static final String SYNCHRONIZATION_REPORT_KEY_LIST_REMOVED_DIP = "removed_dip";
-  public static final String SYNCHRONIZATION_REPORT_KEY_LIST_REMOVED_RISK = "removed_risk";
+  public static final String SYNCHRONIZATION_REPORT_KEY_UUID = "uuid";
+  public static final String SYNCHRONIZATION_REPORT_KEY_INSTANCE_ID = "instance_id";
+  public static final String SYNCHRONIZATION_REPORT_KEY_TO_DATE = "to_date";
+  public static final String SYNCHRONIZATION_REPORT_KEY_FROM_DATE = "from_date";
+  public static final String SYNCHRONIZATION_REPORT_KEY_STATUS = "status";
+  public static final String SYNCHRONIZATION_REPORT_KEY_JOB = "job";
+  public static final String SYNCHRONIZATION_REPORT_KEY_ADDED = "added";
+  public static final String SYNCHRONIZATION_REPORT_KEY_UPDATED = "updated";
+  public static final String SYNCHRONIZATION_REPORT_KEY_REMOVED = "removed";
+  public static final String SYNCHRONIZATION_REPORT_KEY_ISSUES = "issues";
+  public static final String SYNCHRONIZATION_REPORT_KEY_ISSUE_TYPE = "issue_type";
 
-  public static final String SYNCHRONIZATION_REPORT_KEY_LIST_MISSING_AIP = "missing_aip";
-  public static final String SYNCHRONIZATION_REPORT_KEY_LIST_MISSING_DIP = "missing_dip";
-  public static final String SYNCHRONIZATION_REPORT_KEY_LIST_MISSING_RISK = "missing_risk";
+  public static final String SYNCHRONIZATION_REPORT_KEY_DESCRIPTION = "description";
+  public static final String SYNCHRONIZATION_REPORT_KEY_COUNT = "count";
+  public static final String SYNCHRONIZATION_REPORT_KEY_ENTITIES = "entities";
+  public static final String SYNCHRONIZATION_REPORT_KEY_ENTITY_CLASS = "entity_class";
+  public static final String SYNCHRONIZATION_REPORT_KEY_ENTITY_IDS = "entity_ids";
+  // Last Sync file values
+  public static final String SYNCHRONIZATION_REPORT_ISSUE_TYPE_MISSING = "missing";
+  public static final String SYNCHRONIZATION_REPORT_ISSUE_DESCRIPTION_MISSING = "An entity was found is central instance but is not listed in local instance nor is listed as being removed from local instance";
+  public static final String SYNCHRONIZATION_REPORT_DESCRIPTION_CENTRAL_ADDED = "entities added in central instance";
+  public static final String SYNCHRONIZATION_REPORT_DESCRIPTION_CENTRAL_UPDATED = "entities updated in central instance";
+  public static final String SYNCHRONIZATION_REPORT_DESCRIPTION_CENTRAL_REMOVED = "entities removed from central instance because they were removed from local instance";
 
   /** Private empty constructor */
   private RodaConstants() {

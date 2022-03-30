@@ -33,7 +33,7 @@ import org.roda.core.data.exceptions.GenericException;
 import org.roda.core.data.exceptions.JobAlreadyStartedException;
 import org.roda.core.data.exceptions.NotFoundException;
 import org.roda.core.data.exceptions.RequestNotValidException;
-import org.roda.core.data.utils.CentralEntitiesJsonUtils;
+import org.roda.core.data.utils.LastSynchronizationReportUtils;
 import org.roda.core.data.utils.JsonUtils;
 import org.roda.core.data.v2.accessToken.AccessToken;
 import org.roda.core.data.v2.index.IsIndexed;
@@ -51,7 +51,7 @@ import org.roda.core.data.v2.risks.Risk;
 import org.roda.core.data.v2.risks.RiskIncidence;
 import org.roda.core.data.v2.synchronization.bundle.AttachmentState;
 import org.roda.core.data.v2.synchronization.bundle.BundleState;
-import org.roda.core.data.v2.synchronization.bundle.CentralEntities;
+import org.roda.core.data.v2.synchronization.bundle.LastSynchronizationState;
 import org.roda.core.data.v2.synchronization.bundle.EntitiesBundle;
 import org.roda.core.data.v2.synchronization.bundle.PackageState;
 import org.roda.core.data.v2.synchronization.central.DistributedInstance;
@@ -230,7 +230,7 @@ public class SyncUtils {
       BundleState bundleState = getOutcomeBundleState(instanceIdentifier);
       String fileName = new SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ss'.zip'").format(bundleState.getToDate());
       Path filePath = RodaCoreFactory.getSynchronizationDirectoryPath()
-        .resolve(RodaConstants.CORE_SYNCHRONIZATION_OUTCOME_FOLDER).resolve(fileName);
+        .resolve(RodaConstants.CORE_SYNCHRONIZATION_OUTGOING_FOLDER).resolve(fileName);
       if (FSUtils.exists(filePath)) {
         FSUtils.deletePath(filePath);
       }
@@ -571,14 +571,14 @@ public class SyncUtils {
    * Write the file with the entities removed and the missing entities from the
    * last synchronization.
    * 
-   * @param centralEntities
-   *          {@link CentralEntities}.
+   * @param lastSynchronizationState
+   *          {@link LastSynchronizationState}.
    * @param instanceIdentifier
    *          The instance identifier.
    * @throws IOException
    *           if some i/o error occurs.
    */
-  public static void writeEntitiesFile(final CentralEntities centralEntities, String instanceIdentifier)
+  public static void writeCentralLastSyncFile(final LastSynchronizationState lastSynchronizationState, String instanceIdentifier)
     throws IOException {
     final StringBuilder fileNameBuilder = new StringBuilder();
     fileNameBuilder.append(RodaConstants.SYNCHRONIZATION_REPORT_FILE).append("_").append(instanceIdentifier)
@@ -591,7 +591,7 @@ public class SyncUtils {
     try {
       Files.deleteIfExists(temporaryPath);
       Files.createFile(temporaryPath);
-      CentralEntitiesJsonUtils.writeJsonToFile(centralEntities, temporaryPath);
+      LastSynchronizationReportUtils.writeJsonToFile(lastSynchronizationState, temporaryPath);
       Files.move(temporaryPath, lastSyncReportPath, StandardCopyOption.REPLACE_EXISTING);
     } catch (final IOException e) {
       Files.deleteIfExists(temporaryPath);

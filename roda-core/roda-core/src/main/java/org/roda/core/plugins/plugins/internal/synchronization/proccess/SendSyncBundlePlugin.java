@@ -197,7 +197,7 @@ public class SendSyncBundlePlugin extends AbstractPlugin<Void> {
     try {
       String fileName = new SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ss'.zip'").format(bundleStateFile.getToDate());
       Path filePath = RodaCoreFactory.getSynchronizationDirectoryPath()
-        .resolve(RodaConstants.CORE_SYNCHRONIZATION_OUTCOME_FOLDER).resolve(fileName);
+        .resolve(RodaConstants.CORE_SYNCHRONIZATION_OUTGOING_FOLDER).resolve(fileName);
       if (FSUtils.exists(filePath)) {
         FSUtils.deletePath(filePath);
       }
