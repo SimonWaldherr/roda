@@ -338,26 +338,11 @@ public class FileStorageService implements StorageService {
   @Override
   public Binary createBinary(StoragePath storagePath, ContentPayload payload, boolean asReference)
     throws GenericException, AlreadyExistsException {
-    if (asReference) {
-      Path binPath = FSUtils.getEntityPath(basePath, storagePath);
+    Path binPath = FSUtils.getEntityPath(basePath, storagePath);
+    if (FSUtils.exists(binPath)) {
+      throw new AlreadyExistsException("Binary already exists: " + binPath);
+    } else {
       try {
-        if (FSUtils.exists(binPath)) {
-          if (payload instanceof ExternalFileManifestContentPayload) {
-            ShallowFile shallowFile = ((ExternalFileManifestContentPayload) payload).getShallowFiles().getObjects()
-              .get(0);
-            ShallowFiles manifestContent = FSUtils.retrieveManifestFileContent(binPath);
-
-            for (ShallowFile manifestFileShallow : manifestContent.getObjects()) {
-              if (manifestFileShallow.getName().equals(shallowFile.getName())) {
-                throw new AlreadyExistsException("Binary already exists: " + binPath);
-              }
-            }
-            manifestContent.addObject(shallowFile);
-            payload = new ExternalFileManifestContentPayload(manifestContent);
-          } else {
-            throw new GenericException("Looking for a manifest external file but found something else: " + storagePath);
-          }
-        }
         // ensuring parent exists
         Path parent = binPath.getParent();
         if (!FSUtils.exists(parent)) {
@@ -366,36 +351,15 @@ public class FileStorageService implements StorageService {
 
         // writing file
         payload.writeToPath(binPath);
+        ContentPayload newPayload = new FSPathContentPayload(binPath);
         Long sizeInBytes = Files.size(binPath);
-        return new DefaultBinary(storagePath, payload, sizeInBytes, true, new HashMap<>());
+        Map<String, String> contentDigest = null;
+
+        return new DefaultBinary(storagePath, newPayload, sizeInBytes, asReference, contentDigest);
+      } catch (FileAlreadyExistsException e) {
+        throw new AlreadyExistsException("Binary already exists: " + binPath);
       } catch (IOException e) {
         throw new GenericException("Could not create binary", e);
-      }
-    } else {
-      Path binPath = FSUtils.getEntityPath(basePath, storagePath);
-      if (FSUtils.exists(binPath)) {
-        throw new AlreadyExistsException("Binary already exists: " + binPath);
-      } else {
-        try {
-          // ensuring parent exists
-          Path parent = binPath.getParent();
-          if (!FSUtils.exists(parent)) {
-            Files.createDirectories(parent);
-          }
-
-          // writing file
-          payload.writeToPath(binPath);
-          ContentPayload newPayload = new FSPathContentPayload(binPath);
-          Long sizeInBytes = Files.size(binPath);
-          boolean isReference = false;
-          Map<String, String> contentDigest = null;
-
-          return new DefaultBinary(storagePath, newPayload, sizeInBytes, isReference, contentDigest);
-        } catch (FileAlreadyExistsException e) {
-          throw new AlreadyExistsException("Binary already exists: " + binPath);
-        } catch (IOException e) {
-          throw new GenericException("Could not create binary", e);
-        }
       }
     }
   }

@@ -46,6 +46,7 @@ import org.roda.core.storage.fs.FSPathContentPayload;
 import org.roda.core.util.IdUtils;
 import org.roda_project.commons_ip2.mets_v1_12.beans.FileType;
 import org.roda_project.commons_ip2.model.IPDescriptiveMetadata;
+import org.roda_project.commons_ip2.model.IPFile;
 import org.roda_project.commons_ip2.model.IPFileInterface;
 import org.roda_project.commons_ip2.model.IPFileShallow;
 import org.roda_project.commons_ip2.model.IPMetadata;
@@ -287,54 +288,10 @@ public class EARKSIP2ToAIPPluginUtils {
       notify);
 
     // process representation files
-    boolean hasShallowFile = false;
-    for (IPFileInterface file : sr.getData()) {
-      List<String> directoryPath = null;
-      String fileId = null;
-      ContentPayload payload = null;
-      if (file instanceof IPFileShallow) {
-        if (((IPFileShallow) file).getFileLocation() != null) {
-          // this is an actual shallow file
-          fileId = RodaConstants.RODA_MANIFEST_EXTERNAL_FILES;
-          directoryPath = file.getRelativeFolders();
-          payload = processIPFileShallow(aipId, representation.getId(), (IPFileShallow) file);
-          hasShallowFile = true;
-        } else {
-          // this is an empty folder
-          final StoragePath emptyDirectoryStoragePath = ModelUtils.getDirectoryStoragePath(aipId,
-            representation.getId(), file.getRelativeFolders());
-          model.getStorage().createDirectory(emptyDirectoryStoragePath);
-          // TODO jgomes 2022-03-09: Create model service method to create empty directory
-        }
+    processIPFile(model, sr, aipId, representation, notify, update, reportItem);
 
-      } else {
-        fileId = file.getFileName();
-        directoryPath = file.getRelativeFolders();
-        payload = new FSPathContentPayload(file.getPath());
-      }
-
-      if (payload != null) {
-
-        try {
-          final File createdFile = model.createFile(aipId, representation.getId(), directoryPath, fileId, payload,
-            notify);
-          if (reportItem != null && update) {
-            reportItem.getSipInformation().addFileData(aipId, IdUtils.getRepresentationId(representation), createdFile);
-          }
-        } catch (final AlreadyExistsException e) {
-          if (update) {
-            final File updatedFile = model.updateFile(aipId, representation.getId(), directoryPath, fileId, payload,
-              true, notify);
-            if (reportItem != null) {
-              reportItem.getSipInformation().addFileData(aipId, IdUtils.getRepresentationId(representation),
-                updatedFile);
-            }
-          } else {
-            throw e;
-          }
-        }
-      }
-    }
+    // process representation file shallow
+    boolean hasShallowFile = processIPFileShallow(model, sr, aipId, representation, notify, update, reportItem);
 
     if (hasShallowFile) {
       model.changeRepresentationShallowFileFlag(aipId, representation.getId(), true, username, false);
@@ -347,8 +304,61 @@ public class EARKSIP2ToAIPPluginUtils {
     processSchemas(model, sr.getSchemas(), aipId, representation.getId(), false);
   }
 
-  private static ContentPayload processIPFileShallow(String aipId, String representationId, IPFileShallow file)
-    throws GenericException {
+  private static void processIPFile(ModelService model, IPRepresentation sr, String aipId,
+    Representation representation, boolean notify, boolean update, Report reportItem)
+    throws AuthorizationDeniedException, RequestNotValidException, NotFoundException, GenericException,
+    AlreadyExistsException {
+    for (IPFileInterface file : sr.getData()) {
+      if (file instanceof IPFile) {
+        createRepresentationFile(model, aipId, representation, notify, update, reportItem, file.getRelativeFolders(),
+          file.getFileName(), new FSPathContentPayload(file.getPath()));
+      }
+    }
+  }
+
+  private static boolean processIPFileShallow(ModelService model, IPRepresentation sr, String aipId,
+    Representation representation, boolean notify, boolean update, Report reportItem) throws GenericException,
+    RequestNotValidException, AuthorizationDeniedException, AlreadyExistsException, NotFoundException {
+
+    boolean hasShallowFile = false;
+    HashMap<List<String>, ShallowFiles> shallowFilesHashMap = new HashMap<>();
+
+    for (IPFileInterface file : sr.getData()) {
+      if (file instanceof IPFileShallow) {
+        if (((IPFileShallow) file).getFileLocation() != null) {
+          // this is an actual shallow file
+          List<String> directoryPath = file.getRelativeFolders();
+          if(shallowFilesHashMap.get(directoryPath) == null){
+            shallowFilesHashMap.put(directoryPath, new ShallowFiles());
+          }
+          ShallowFile shallowFile = processIPFileShallow(aipId, representation.getId(), (IPFileShallow) file);
+          // accumulate all shallow files per directory to create in one go
+          shallowFilesHashMap.get(directoryPath).addObject(shallowFile);
+        } else {
+          // this is an empty folder
+          final StoragePath emptyDirectoryStoragePath = ModelUtils.getDirectoryStoragePath(aipId,
+            representation.getId(), file.getRelativeFolders());
+          model.getStorage().createDirectory(emptyDirectoryStoragePath);
+          // TODO jgomes 2022-03-09: Create model service method to create empty directory
+        }
+      }
+    }
+
+    // create the shallow files
+    for (List<String> directoryPath : shallowFilesHashMap.keySet()) {
+      String fileId = RodaConstants.RODA_MANIFEST_EXTERNAL_FILES;
+      hasShallowFile = true;
+
+      ShallowFiles shallowFiles = shallowFilesHashMap.get(directoryPath);
+      ContentPayload payload = new ExternalFileManifestContentPayload(shallowFiles);
+      createRepresentationFile(model, aipId, representation, notify, update, reportItem, directoryPath, fileId,
+          payload);
+    }
+
+    return hasShallowFile;
+  }
+  private static ShallowFile processIPFileShallow(String aipId, String representationId, IPFileShallow file)
+      throws GenericException {
     try {
       final String decode = URLDecoder.decode(file.getFileLocation().toString(), "UTF-8");
       FileType fileType = file.getFileType();
@@ -361,13 +371,31 @@ public class EARKSIP2ToAIPPluginUtils {
       shallowFile.setMimeType(fileType.getMIMETYPE());
       shallowFile.setChecksum(fileType.getCHECKSUM());
       shallowFile.setChecksumType(fileType.getCHECKSUMTYPE());
-
-      ShallowFiles shallowFiles = new ShallowFiles();
-      shallowFiles.addObject(shallowFile);
-      return new ExternalFileManifestContentPayload(shallowFiles);
-
+      return shallowFile;
     } catch (final UnsupportedEncodingException e) {
       throw new GenericException("Unable to identify the resource name", e);
+    }
+  }
+
+  private static void createRepresentationFile(ModelService model, String aipId, Representation representation,
+    boolean notify, boolean update, Report reportItem, List<String> directoryPath, String fileId,
+    ContentPayload payload) throws RequestNotValidException, GenericException, AuthorizationDeniedException,
+    NotFoundException, AlreadyExistsException {
+    try {
+      final File createdFile = model.createFile(aipId, representation.getId(), directoryPath, fileId, payload, notify);
+      if (reportItem != null && update) {
+        reportItem.getSipInformation().addFileData(aipId, IdUtils.getRepresentationId(representation), createdFile);
+      }
+    } catch (final AlreadyExistsException e) {
+      if (update) {
+        final File updatedFile = model.updateFile(aipId, representation.getId(), directoryPath, fileId, payload, true,
+          notify);
+        if (reportItem != null) {
+          reportItem.getSipInformation().addFileData(aipId, IdUtils.getRepresentationId(representation), updatedFile);
+        }
+      } else {
+        throw e;
+      }
     }
   }
 

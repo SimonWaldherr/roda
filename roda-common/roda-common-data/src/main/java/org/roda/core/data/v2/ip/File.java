@@ -56,6 +56,9 @@ public class File implements IsModelObject, HasId {
     this.instanceId = instanceId;
   }
 
+  public File(String id, String aipId, String representationId, List<String> path, boolean isDirectory, boolean isReference) {
+    this(id, aipId, representationId, path, isDirectory, isReference, null, null, null, null);
+  }
   public File(String id, String aipId, String representationId, List<String> path, boolean isDirectory) {
     this(id, aipId, representationId, path, isDirectory, false, null, null, null, null);
   }

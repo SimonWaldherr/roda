@@ -93,6 +93,7 @@ public class ResourceParseUtils {
     if (resource instanceof DefaultBinary) {
       ContentPayload content = ((DefaultBinary) resource).getContent();
       if (content instanceof JsonContentPayload) {
+        // For index
         try {
           ShallowFile shallowFile = JsonUtils.getObjectFromJson(content.createInputStream(), ShallowFile.class);
           String url = shallowFile.getLocation().toString();
@@ -103,6 +104,8 @@ public class ResourceParseUtils {
         } catch (IOException e) {
           throw new GenericException("Error while trying to convert shallow file into a representation file");
         }
+      } else if(((DefaultBinary) resource).isReference()) {
+        return new File(id, aipId, representationId, filePath, false, true);
       } else {
         return new File(id, aipId, representationId, filePath, false);
       }
